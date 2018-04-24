@@ -31,6 +31,8 @@ passPhrase  = "actuelle"
 A           = "Pairwise key expansion" #this string is used in the pseudo-random function
 
 
+wpa[5].show()
+
 ssid        = wpa[0].info
 APmac       = a2b_hex(wpa[0].addr2.replace(":",""))
 Clientmac   = a2b_hex(wpa[1].addr1.replace(":",""))
