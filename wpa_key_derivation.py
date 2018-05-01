@@ -30,16 +30,31 @@ wpa=rdpcap("wpa_handshake.cap")
 passPhrase  = "actuelle"
 A           = "Pairwise key expansion" #this string is used in the pseudo-random function
 
+# Les trames de la capture se trouvent dans un tableau. Légendes des indices (trames)
+# 0. Beacon
+# 1. Auth
+# 2. Auth
+# 3. Assoc
+# 4. Assoc
+# 5. Handshake 
+# 6. Handshake
+# 7. Handshake
+# 8. Handshake
+# 9. Data
+# 10. Data 
 
-wpa[5].show()
-
+# Depuis la trame Beacon, recuperer le ssid
 ssid        = wpa[0].info
+# Depuis la trame Beacon, recuperer l'adresse MAC de l'AP
 APmac       = a2b_hex(wpa[0].addr2.replace(":",""))
+# Depuis la trame d'auth, recuperer l'adresse MAC du client
 Clientmac   = a2b_hex(wpa[1].addr1.replace(":",""))
+# Depuis la première trame du handshake, récuperer le nonce de l'AP
 ANonce      = (wpa[5].load)[13:45]
+# Depuis la deuxième trame du handshake, récuperer le nonce du client
 SNonce      = (wpa[6].load)[13:45]
-
-mic_to_test = "36eef66540fa801ceee2fea9b7929b40"
+# Depuis la quatrième trame du handshake, récuperer le MIC (à tester)
+mic_to_test = b2a_hex((wpa[8].load)[77:93])
 
 B           = min(APmac,Clientmac)+max(APmac,Clientmac)+min(ANonce,SNonce)+max(ANonce,SNonce) #used in pseudo-random function
 
