@@ -33,8 +33,12 @@ def AP_sniff(pkt):
 
 def handshake_sniff(pkt):
 	if pkt.type == 2 and pkt.subtype == 0:
-		if pkt.addr2 == victimMAC:
-			return True
+		if (pkt.addr2 == victimMAC or pkt.addr2 == APmac) and (pkt.addr1 == victimMAC or pkt.addr1 == APmac):
+			wrpcap("4way.pcap",pkt,append=True)
+			if(len(rdpcap("4way.pcap")) == 4):
+				return True
+			else:
+				return False
 
 
 # Sniff le réseau en fct l'interface et filtres les paquets
