@@ -47,6 +47,7 @@ replaceStr 	= "0" * len(micOriginal)
 
 data        = b2a_hex(str((wpa[8])[EAPOL]))
 data 		= data.replace(micOriginal,replaceStr)
+data 		= a2b_hex(data)
 
 def customPRF512(key,A,B):
     """

