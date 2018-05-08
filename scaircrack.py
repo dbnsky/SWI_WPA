@@ -26,9 +26,12 @@ import hmac, hashlib
 # Read capture file -- it contains beacon, authentication, associacion, handshake and data
 wpa=rdpcap("wpa_handshake.cap") 
 
+
+
 # Important parameters for key derivation - most of them can be obtained from the pcap file
 passPhrase  = "actuelle"
 A           = "Pairwise key expansion" #this string is used in the pseudo-random function
+
 
 ssid        = wpa[0].info
 APmac       = a2b_hex(wpa[0].addr2.replace(":",""))
@@ -39,7 +42,11 @@ micOriginal = b2a_hex((wpa[8].load)[77:93])
 
 B           = min(APmac,Clientmac)+max(APmac,Clientmac)+min(ANonce,SNonce)+max(ANonce,SNonce) #used in pseudo-random function
 
-data        = a2b_hex("0103005f02030a0000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") #cf "Quelques détails importants" dans la donnée
+#String used to replace the mic in the raw data
+replaceStr 	= "0" * len(micOriginal)
+
+data        = b2a_hex(str((wpa[8])[EAPOL]))
+data 		= data.replace(micOriginal,replaceStr)
 
 def customPRF512(key,A,B):
     """

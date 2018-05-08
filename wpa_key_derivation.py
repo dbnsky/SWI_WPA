@@ -58,7 +58,11 @@ mic_to_test = b2a_hex((wpa[8].load)[77:93])
 
 B           = min(APmac,Clientmac)+max(APmac,Clientmac)+min(ANonce,SNonce)+max(ANonce,SNonce) #used in pseudo-random function
 
-data        = a2b_hex("0103005f02030a0000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") #cf "Quelques détails importants" dans la donnée
+#String used to replace the mic in the raw data
+replaceStr  = "0" * len(mic_to_test)
+
+data        = b2a_hex(str((wpa[8])[EAPOL]))
+data        = data.replace(mic_to_test,replaceStr)
 
 print "\n\nValues used to derivate keys"
 print "============================"
