@@ -49,6 +49,7 @@ data        = b2a_hex(str((wpa[8])[EAPOL]))
 data 		= data.replace(micOriginal,replaceStr)
 data 		= a2b_hex(data)
 
+
 def customPRF512(key,A,B):
     """
     This function calculates the key expansion from the 256 bit PMK to the 512 bit PTK
